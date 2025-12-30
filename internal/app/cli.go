@@ -55,7 +55,7 @@ func parseArgs(args []string) (model.Options, string, error) {
 	}
 
 	if showHelp {
-		printUsage(os.Stdout)
+		printUsage(os.Stdout, opts)
 		return opts, "", errHelp
 	}
 	if showVersion {
@@ -79,32 +79,62 @@ func parseArgs(args []string) (model.Options, string, error) {
 	return opts, query, nil
 }
 
-func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintf(w, "%s %s\n\n", model.AppName, model.Version)
-	_, _ = fmt.Fprintln(w, "Usage:")
+func printUsage(w io.Writer, opts model.Options) {
+	useColor := shouldUseColorForWriter(opts, w)
+
+	name := model.AppName
+	version := model.Version
+	tagline := model.Tagline
+
+	header := fmt.Sprintf("%s %s — %s", name, version, tagline)
+	if useColor {
+		header = "\x1b[1m\x1b[36m" + name + "\x1b[0m" +
+			" " +
+			"\x1b[1m" + version + "\x1b[0m" +
+			"\x1b[90m — " + tagline + "\x1b[0m"
+	}
+
+	heading := func(s string) string {
+		if !useColor {
+			return s
+		}
+		return "\x1b[1m" + s + "\x1b[0m"
+	}
+
+	flagName := func(s string) string {
+		if !useColor {
+			return s
+		}
+		return "\x1b[36m" + s + "\x1b[0m"
+	}
+
+	_, _ = fmt.Fprintln(w, header)
+	_, _ = fmt.Fprintln(w, "")
+	_, _ = fmt.Fprintln(w, heading("Usage:"))
 	_, _ = fmt.Fprintln(w, "  gifgrep [flags] <query>")
 	_, _ = fmt.Fprintln(w, "  gifgrep --tui [flags] <query>")
 	_, _ = fmt.Fprintln(w, "  gifgrep --gif <path|url> --still <time> [--out <file>]")
 	_, _ = fmt.Fprintln(w, "  gifgrep --gif <path|url> --stills <N> [--stills-cols <N>] [--out <file>]")
 	_, _ = fmt.Fprintln(w, "")
-	_, _ = fmt.Fprintln(w, "Flags:")
-	_, _ = fmt.Fprintln(w, "  -i            ignore case")
-	_, _ = fmt.Fprintln(w, "  -v            invert vibe (exclude mood)")
-	_, _ = fmt.Fprintln(w, "  -E            regex filter over title+tags")
-	_, _ = fmt.Fprintln(w, "  -n            number results")
-	_, _ = fmt.Fprintln(w, "  -m <N>        max results")
-	_, _ = fmt.Fprintln(w, "  --mood <s>    mood filter")
-	_, _ = fmt.Fprintln(w, "  --json        json output")
-	_, _ = fmt.Fprintln(w, "  --tui         interactive mode")
-	_, _ = fmt.Fprintln(w, "  --source <s>  source (auto, tenor, giphy)")
-	_, _ = fmt.Fprintln(w, "  --gif <s>     gif input path or URL")
-	_, _ = fmt.Fprintln(w, "  --still <s>   extract still at time (e.g. 1.5s)")
-	_, _ = fmt.Fprintln(w, "  --stills <N>  contact sheet frame count")
-	_, _ = fmt.Fprintln(w, "  --stills-cols <N>    contact sheet columns")
-	_, _ = fmt.Fprintln(w, "  --stills-padding <N> contact sheet padding (px)")
-	_, _ = fmt.Fprintln(w, "  --out <s>     output path or '-' for stdout")
-	_, _ = fmt.Fprintln(w, "  --version     show version")
-	_, _ = fmt.Fprintln(w, "  -h, --help    show help")
+	_, _ = fmt.Fprintln(w, heading("Flags:"))
+	_, _ = fmt.Fprintln(w, "  "+flagName("-i")+"            ignore case")
+	_, _ = fmt.Fprintln(w, "  "+flagName("-v")+"            invert vibe (exclude mood)")
+	_, _ = fmt.Fprintln(w, "  "+flagName("-E")+"            regex filter over title+tags")
+	_, _ = fmt.Fprintln(w, "  "+flagName("-n")+"            number results")
+	_, _ = fmt.Fprintln(w, "  "+flagName("-m <N>")+"        max results")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--mood <s>")+"    mood filter")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--json")+"        json output")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--tui")+"         interactive mode")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--source <s>")+"  source (auto, tenor, giphy)")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--color <s>")+"   color (auto, always, never)")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--gif <s>")+"     gif input path or URL")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--still <s>")+"   extract still at time (e.g. 1.5s)")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--stills <N>")+"  contact sheet frame count")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--stills-cols <N>")+"    contact sheet columns")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--stills-padding <N>")+" contact sheet padding (px)")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--out <s>")+"     output path or '-' for stdout")
+	_, _ = fmt.Fprintln(w, "  "+flagName("--version")+"     show version")
+	_, _ = fmt.Fprintln(w, "  "+flagName("-h, --help")+"    show help")
 }
 
 func parseDurationValue(raw string) (time.Duration, error) {
@@ -181,6 +211,10 @@ func runScript(opts model.Options, query string) error {
 }
 
 func shouldUseColor(opts model.Options) bool {
+	return shouldUseColorForWriter(opts, os.Stdout)
+}
+
+func shouldUseColorForWriter(opts model.Options, w io.Writer) bool {
 	if opts.Color == "never" {
 		return false
 	}
@@ -194,5 +228,9 @@ func shouldUseColor(opts model.Options) bool {
 	if termEnv == "dumb" || termEnv == "" {
 		return false
 	}
-	return term.IsTerminal(int(os.Stdout.Fd()))
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	return term.IsTerminal(int(f.Fd()))
 }

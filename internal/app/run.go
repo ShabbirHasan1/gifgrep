@@ -44,7 +44,7 @@ func Run(args []string) int {
 	}
 
 	if strings.TrimSpace(query) == "" {
-		printUsage(os.Stderr)
+		printUsage(os.Stderr, opts)
 		return 1
 	}
 

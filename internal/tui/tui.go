@@ -473,7 +473,7 @@ func buildLayout(state *appState, rows, cols int) layout {
 func drawHeader(out *bufio.Writer, useColor bool, cols int, tagline string) {
 	header := styleIf(useColor, "gifgrep", "\x1b[1m", "\x1b[36m")
 	if strings.TrimSpace(tagline) == "" {
-		tagline = "Grep the GIF. Stick the landing."
+		tagline = model.Tagline
 	}
 	header += styleIf(useColor, " — "+tagline, "\x1b[90m")
 	writeLineAt(out, 1, 1, header, cols)

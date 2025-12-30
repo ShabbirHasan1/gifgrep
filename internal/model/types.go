@@ -4,7 +4,9 @@ import "time"
 
 const AppName = "gifgrep"
 
-var Version = "dev"
+const Tagline = "Grep the GIF. Stick the landing."
+
+var Version = "0.1.0"
 
 type Result struct {
 	ID         string   `json:"id"`
