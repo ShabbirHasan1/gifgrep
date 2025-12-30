@@ -99,6 +99,57 @@ func TestBackgroundDisposalUsesColor(t *testing.T) {
 	}
 }
 
+func TestDecodeFrameOffsetComposite(t *testing.T) {
+	pal := color.Palette{color.Black, color.White}
+	frame1 := image.NewPaletted(image.Rect(0, 0, 4, 4), pal)
+	frame2 := image.NewPaletted(image.Rect(1, 1, 3, 3), pal)
+	frame2.SetColorIndex(1, 1, 1)
+	frame2.SetColorIndex(2, 2, 1)
+
+	anim := &gif.GIF{
+		Image:    []*image.Paletted{frame1, frame2},
+		Delay:    []int{5, 5},
+		Disposal: []byte{gif.DisposalNone, gif.DisposalNone},
+		Config: image.Config{
+			Width:      4,
+			Height:     4,
+			ColorModel: pal,
+		},
+		BackgroundIndex: 0,
+	}
+
+	var buf bytes.Buffer
+	_ = gif.EncodeAll(&buf, anim)
+
+	decoded, err := Decode(buf.Bytes(), DefaultOptions())
+	if err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if len(decoded.Frames) != 2 {
+		t.Fatalf("expected 2 frames, got %d", len(decoded.Frames))
+	}
+
+	img, err := png.Decode(bytes.NewReader(decoded.Frames[1].PNG))
+	if err != nil {
+		t.Fatalf("png decode failed: %v", err)
+	}
+
+	rr, gg, bb, _ := img.At(0, 0).RGBA()
+	if rr != 0 || gg != 0 || bb != 0 {
+		t.Fatalf("expected background to stay black at (0,0), got %d %d %d", rr, gg, bb)
+	}
+
+	rr, gg, bb, _ = img.At(1, 1).RGBA()
+	if rr != 0xffff || gg != 0xffff || bb != 0xffff {
+		t.Fatalf("expected offset pixel to be white at (1,1), got %d %d %d", rr, gg, bb)
+	}
+
+	rr, gg, bb, _ = img.At(3, 3).RGBA()
+	if rr != 0 || gg != 0 || bb != 0 {
+		t.Fatalf("expected background to stay black at (3,3), got %d %d %d", rr, gg, bb)
+	}
+}
+
 func TestBackgroundIndexOutOfRangeUsesTransparent(t *testing.T) {
 	data := makeOutOfRangeBackgroundGIF()
 	frames, err := Decode(data, DefaultOptions())
