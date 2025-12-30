@@ -13,6 +13,7 @@ import (
 
 	"github.com/steipete/gifgrep/internal/model"
 	"github.com/steipete/gifgrep/internal/search"
+	"golang.org/x/term"
 )
 
 var (
@@ -133,12 +134,42 @@ func runScript(opts model.Options, query string) error {
 		return enc.Encode(results)
 	}
 
+	useColor := shouldUseColor(opts)
 	for i, res := range results {
 		prefix := ""
 		if opts.Number {
 			prefix = fmt.Sprintf("%d\t", i+1)
 		}
-		_, _ = fmt.Fprintf(os.Stdout, "%s%s\n", prefix, res.URL)
+		label := res.Title
+		if label == "" {
+			label = res.ID
+		}
+		label = strings.Join(strings.Fields(label), " ")
+		if label == "" {
+			label = "untitled"
+		}
+		if useColor {
+			label = "\x1b[1m" + label + "\x1b[0m"
+			res.URL = "\x1b[36m" + res.URL + "\x1b[0m"
+		}
+		_, _ = fmt.Fprintf(os.Stdout, "%s%s\t%s\n", prefix, label, res.URL)
 	}
 	return nil
+}
+
+func shouldUseColor(opts model.Options) bool {
+	if opts.Color == "never" {
+		return false
+	}
+	if opts.Color == "always" {
+		return true
+	}
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	termEnv := strings.ToLower(strings.TrimSpace(os.Getenv("TERM")))
+	if termEnv == "dumb" || termEnv == "" {
+		return false
+	}
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
