@@ -93,6 +93,10 @@ func TestBackgroundDisposalUsesColor(t *testing.T) {
 	if r != 0 || g != 0 || b != 0 {
 		t.Fatalf("expected background black, got %d %d %d", r, g, b)
 	}
+	r, g, b, _ = img.At(1, 1).RGBA()
+	if r == 0 && g == 0 && b == 0 {
+		t.Fatalf("expected second frame to draw at offset")
+	}
 }
 
 func TestBackgroundIndexOutOfRangeUsesTransparent(t *testing.T) {
@@ -111,6 +115,10 @@ func TestBackgroundIndexOutOfRangeUsesTransparent(t *testing.T) {
 	_, _, _, a := img.At(0, 0).RGBA()
 	if a != 0 {
 		t.Fatalf("expected transparent background, got alpha %d", a)
+	}
+	_, _, _, a = img.At(1, 1).RGBA()
+	if a == 0 {
+		t.Fatalf("expected second frame to draw at offset")
 	}
 }
 

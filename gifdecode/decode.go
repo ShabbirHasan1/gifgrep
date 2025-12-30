@@ -95,7 +95,7 @@ func decodeGIF(g *gif.GIF, opts Options) (*Frames, error) {
 			copy(prev.Pix, canvas.Pix)
 		}
 
-		draw.Draw(canvas, frame.Bounds(), frame, image.Point{}, draw.Over)
+		draw.Draw(canvas, frame.Bounds(), frame, frame.Bounds().Min, draw.Over)
 		pngData, err := encodePNG(canvas)
 		if err != nil {
 			return nil, err
