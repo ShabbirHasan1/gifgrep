@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "go run ./cmd/gifgrep",
-    "tenor": "pnpm start",
+    "gifgrep": "pnpm start",
     "fmt": "gofumpt -w .",
     "lint": "golangci-lint run",
     "snap": "node scripts/ghostty-web-snap.mjs",
