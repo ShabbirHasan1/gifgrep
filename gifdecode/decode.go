@@ -10,6 +10,7 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"io"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,11 @@ type Frames struct {
 	Width  int
 	Height int
 }
+
+var (
+	pngEncoder = png.Encoder{CompressionLevel: png.BestSpeed}
+	pngPool    = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+)
 
 func Decode(data []byte, opts Options) (*Frames, error) {
 	return DecodeReader(bytes.NewReader(data), opts)
@@ -161,11 +167,15 @@ func backgroundColor(g *gif.GIF) color.Color {
 }
 
 func encodePNG(img image.Image) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
+	buf := pngPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer pngPool.Put(buf)
+	if err := pngEncoder.Encode(buf, img); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	out := make([]byte, buf.Len())
+	copy(out, buf.Bytes())
+	return out, nil
 }
 
 func readAllLimit(r io.Reader, maxBytes int64) ([]byte, error) {
