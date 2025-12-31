@@ -1,9 +1,9 @@
-# gifgrep - grep the gif
+# gifgrep — Grep the GIF. Stick the landing.
 
 Two modes, one tool.
 - Scriptable CLI: URLs/JSON for pipes
 - TUI: arrow-key browse + inline preview (Kitty graphics)
-- Stills: extract a single frame or a contact sheet (grid of key frames)
+- Stills: extract a single frame or a PNG sheet of key frames
 
 Website: `https://gifgrep.com`
 
@@ -13,46 +13,30 @@ Website: `https://gifgrep.com`
 
 ## Quickstart
 ```bash
-gifgrep cats -m 5
+gifgrep cats --max 5
 gifgrep cats --json | jq '.[] | .url'
-gifgrep --tui "office handshake"
+gifgrep tui "office handshake"
 
-gifgrep --gif ./clip.gif --still 1.5s --out still.png
-gifgrep --gif ./clip.gif --stills 9 --stills-cols 3 --out sheet.png
+gifgrep still ./clip.gif --at 1.5s -o still.png
+gifgrep sheet ./clip.gif --frames 9 --cols 3 -o sheet.png
 ```
 
-## Contact sheet
-Single PNG grid of sampled frames. Use `--stills` to pick how many frames, `--stills-cols` to control the grid.
+## Sheet
+Single PNG grid of sampled frames. Use `--frames` to pick how many frames, `--cols` to control the grid.
 
 ## Providers
-Select via `--source`:
-- `tenor` (default) - uses public demo key if `TENOR_API_KEY` unset
+Select via `--source` (search + TUI):
+- `auto` (default) - picks giphy when `GIPHY_API_KEY` is set, else tenor
+- `tenor` - uses public demo key if `TENOR_API_KEY` unset
 - `giphy` - requires `GIPHY_API_KEY`
-- `auto` - picks giphy when `GIPHY_API_KEY` is set, else tenor
 
-## Flags
+## CLI
 ```text
-gifgrep [flags] <query>
-gifgrep --tui [flags] <query>
-gifgrep --gif <path|url> --still <time> [--out <file>]
-gifgrep --gif <path|url> --stills <N> [--stills-cols <N>] [--out <file>]
-
--i            ignore case
--v            invert vibe (exclude mood)
--E            regex filter over title+tags
--n            number results
--m <N>        max results
---mood <s>    mood filter
---json        json output
---tui         interactive mode
---source <s>  source (tenor, giphy, auto)
---gif <s>     gif input path or URL
---still <s>   extract still at time (e.g. 1.5s)
---stills <N>  contact sheet frame count
---stills-cols <N>    contact sheet columns
---stills-padding <N> contact sheet padding (px)
---out <s>     output path or '-' for stdout
---version     show version
+gifgrep [global flags] <query...>
+gifgrep search [flags] <query...>
+gifgrep tui [flags] [<query...>]
+gifgrep still <gif> --at <time> [-o <file>|-]
+gifgrep sheet <gif> [--frames <N>] [--cols <N>] [--padding <px>] [-o <file>|-]
 ```
 
 ## JSON output
