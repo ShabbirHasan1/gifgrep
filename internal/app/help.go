@@ -12,8 +12,7 @@ import (
 
 func helpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 	useColor := helpWantsColor(ctx)
-	_, _ = fmt.Fprintln(ctx.Stdout, helpHeader(useColor))
-	_, _ = fmt.Fprintln(ctx.Stdout, helpTagline(useColor))
+	_, _ = fmt.Fprintln(ctx.Stdout, helpBanner(useColor))
 	_, _ = fmt.Fprintln(ctx.Stdout)
 
 	if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
@@ -34,18 +33,14 @@ func helpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 	return nil
 }
 
-func helpHeader(useColor bool) string {
+func helpBanner(useColor bool) string {
 	if !useColor {
-		return fmt.Sprintf("%s %s", model.AppName, model.Version)
+		return fmt.Sprintf("%s %s — %s", model.AppName, model.Version, model.Tagline)
 	}
-	return "\x1b[1m\x1b[36m" + model.AppName + "\x1b[0m" + " " + "\x1b[1m" + model.Version + "\x1b[0m"
-}
-
-func helpTagline(useColor bool) string {
-	if !useColor {
-		return model.Tagline
-	}
-	return "\x1b[90m" + model.Tagline + "\x1b[0m"
+	return "\x1b[1m\x1b[36m" + model.AppName + "\x1b[0m" +
+		" " +
+		"\x1b[1m" + model.Version + "\x1b[0m" +
+		"\x1b[90m — " + model.Tagline + "\x1b[0m"
 }
 
 func helpWantsColor(ctx *kong.Context) bool {
