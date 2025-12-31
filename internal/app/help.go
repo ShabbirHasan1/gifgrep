@@ -203,10 +203,13 @@ func rootHelpExtras() []string {
 func searchHelpExtras() []string {
 	return []string{
 		"Output:",
-		"  Default: <title>\\t<url>",
+		"  Default (--format auto): plain (TTY), url (pipe).",
+		"  Use --format plain|tsv|md|url|comment|json, or --json.",
+		"  Use --download to save results to ~/Downloads (combine with --reveal).",
 		"",
 		"Examples:",
 		"  gifgrep cats | head -n 5",
+		"  gifgrep cats --download --max 1 --format url",
 		"  gifgrep search --json cats | jq '.[] | .url'",
 		"  GIPHY_API_KEY=... gifgrep search --source giphy cats",
 	}

@@ -19,12 +19,13 @@ type Result struct {
 }
 
 type Options struct {
-	Color   string
-	Verbose int
-	Quiet   bool
-	Reveal  bool
-	Format  string
-	Thumbs  string
+	Color    string
+	Verbose  int
+	Quiet    bool
+	Reveal   bool
+	Download bool
+	Format   string
+	Thumbs   string
 
 	JSON   bool
 	Number bool

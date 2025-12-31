@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/steipete/gifgrep/internal/download"
 	"github.com/steipete/gifgrep/internal/model"
 	"github.com/steipete/gifgrep/internal/reveal"
 	"github.com/steipete/gifgrep/internal/search"
@@ -50,12 +51,13 @@ func (g Globals) toOptions() model.Options {
 }
 
 type SearchCmd struct {
-	Source string `help:"Source to search." enum:"auto,tenor,giphy" default:"auto"`
-	Max    int    `help:"Max results to fetch." name:"max" short:"m" default:"20"`
-	JSON   bool   `help:"Emit JSON array of results."`
-	Number bool   `help:"Prefix lines with 1-based index." short:"n"`
-	Format string `help:"Output format." enum:"auto,plain,tsv,md,url,comment,json" default:"auto"`
-	Thumbs string `help:"Inline thumbnails (kitty graphics; TTY only)." enum:"auto,always,never" default:"auto"`
+	Source   string `help:"Source to search." enum:"auto,tenor,giphy" default:"auto"`
+	Max      int    `help:"Max results to fetch." name:"max" short:"m" default:"20"`
+	JSON     bool   `help:"Emit JSON array of results."`
+	Number   bool   `help:"Prefix lines with 1-based index." short:"n"`
+	Download bool   `help:"Download results to ~/Downloads."`
+	Format   string `help:"Output format." enum:"auto,plain,tsv,md,url,comment,json" default:"auto"`
+	Thumbs   string `help:"Inline thumbnails (kitty graphics; TTY only)." enum:"auto,always,never" default:"auto"`
 
 	Query []string `arg:"" name:"query" help:"Search query."`
 }
@@ -73,6 +75,7 @@ func (c *SearchCmd) Run(ctx *kong.Context, cli *CLI) error {
 	opts.Source = c.Source
 	opts.Format = c.Format
 	opts.Thumbs = c.Thumbs
+	opts.Download = c.Download
 	return runSearch(ctx.Stdout, ctx.Stderr, opts, query)
 }
 
@@ -156,6 +159,28 @@ func runSearch(stdout io.Writer, stderr io.Writer, opts model.Options, query str
 	results, err := search.Search(query, opts)
 	if err != nil {
 		return err
+	}
+
+	var lastSaved string
+	if opts.Download {
+		for _, res := range results {
+			if res.URL == "" {
+				continue
+			}
+			savedPath, err := download.ToDownloads(res)
+			if err != nil {
+				return err
+			}
+			lastSaved = savedPath
+			if opts.Verbose > 0 && !opts.Quiet {
+				_, _ = fmt.Fprintf(stderr, "saved %s\n", savedPath)
+			}
+		}
+		if opts.Reveal && lastSaved != "" {
+			if err := reveal.Reveal(lastSaved); err != nil {
+				return err
+			}
+		}
 	}
 
 	format := resolveOutputFormat(opts, stdout)

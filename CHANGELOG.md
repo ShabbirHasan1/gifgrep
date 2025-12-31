@@ -11,7 +11,7 @@ First public release of gifgrep — GIF search for terminals: scriptable CLI out
   - TUI browser with inline preview + animation (Kitty graphics, with Ghostty software fallback).
   - Optional inline thumbnails in search output (`--thumbs`) that render into scrollback.
 - Stills: extract a single PNG frame or a sampled “contact sheet” PNG from any GIF (file or URL).
-- Convenience: download/reveal in file manager (`d`/`f` in TUI, `--reveal` globally), plus rich color help/output.
+- Convenience: download/reveal in file manager (`--download`/`--reveal` in CLI, `d`/`f` in TUI), plus rich color help/output.
 
 ### Feature overview
 - **Global flags**
@@ -23,6 +23,7 @@ First public release of gifgrep — GIF search for terminals: scriptable CLI out
   - `gifgrep search --source auto|tenor|giphy --max N <query...>` (bare `gifgrep <query...>` is an alias).
   - `--format auto|plain|tsv|md|url|comment|json` and `--json` for structured output.
   - `--thumbs auto|always|never` for Kitty thumbnails in plain output (TTY-only).
+  - `--download` to save results to `~/Downloads` (combine with `--reveal`).
 
 - **Interactive TUI**
   - `gifgrep tui [query...]` with arrow-key navigation, quick search editing (`/`), and key hints.

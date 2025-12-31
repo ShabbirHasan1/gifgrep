@@ -24,7 +24,8 @@ go install github.com/steipete/gifgrep/cmd/gifgrep@latest
 
 - Scriptable search: readable plain output by default (TTY), plus `--format`, `--json`, `--max`, `--source`.
 - Inline thumbnails in search output: `--thumbs` (Kitty graphics; TTY only).
-- TUI browser: inline preview, quick download (`d`), reveal last download (`f`).
+- Download to `~/Downloads`: `--download` (CLI), `d` (TUI). Reveal with `--reveal` (CLI/TUI) or `f` (TUI).
+- TUI browser: inline preview, quick download, reveal last download.
 - Stills: `still` extracts one frame; `sheet` creates a PNG grid (`--frames`, `--cols`, `--padding`).
 - Color + logging: `--color/--no-color`, `--quiet`, `--verbose`.
 - Providers: `auto` (prefers Giphy when keyed), `tenor`, `giphy`.
@@ -34,6 +35,7 @@ go install github.com/steipete/gifgrep/cmd/gifgrep@latest
 ```bash
 gifgrep cats --max 5
 gifgrep cats --format url | head -n 5
+gifgrep cats --download --max 1 --format url
 gifgrep search --json cats | jq '.[0].url'
 gifgrep tui "office handshake"
 
