@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/alecthomas/kong"
@@ -15,8 +17,20 @@ func helpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 	_, _ = fmt.Fprintln(ctx.Stdout, helpBanner(useColor))
 	_, _ = fmt.Fprintln(ctx.Stdout)
 
-	if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
-		return err
+	if useColor {
+		orig := ctx.Stdout
+		var buf bytes.Buffer
+		ctx.Stdout = &buf
+		err := kong.DefaultHelpPrinter(options, ctx)
+		ctx.Stdout = orig
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprint(orig, colorizeHelpText(buf.String()))
+	} else {
+		if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
+			return err
+		}
 	}
 
 	if options.Summary {
@@ -41,6 +55,73 @@ func helpBanner(useColor bool) string {
 		" " +
 		"\x1b[1m" + model.Version + "\x1b[0m" +
 		"\x1b[90m — " + model.Tagline + "\x1b[0m"
+}
+
+var (
+	reFlagLong     = regexp.MustCompile(`--[a-zA-Z0-9][a-zA-Z0-9-]*(?:=(?:"[^"]*"|[^\s]+))?`)
+	reFlagShort    = regexp.MustCompile(`(^|[\s,])(-[a-zA-Z])([\s,]|$)`)
+	reAngleToken   = regexp.MustCompile(`(<[^>]+>)`)
+	reBracketToken = regexp.MustCompile(`(^|[\s])(\[[^\]]+\])`)
+)
+
+func colorizeHelpText(text string) string {
+	if text == "" {
+		return text
+	}
+
+	var out strings.Builder
+	out.Grow(len(text) + 64)
+
+	inCommands := false
+	lines := strings.SplitAfter(text, "\n")
+	for _, lineWithNL := range lines {
+		line := strings.TrimSuffix(lineWithNL, "\n")
+
+		trim := strings.TrimSpace(line)
+		switch trim {
+		case "Commands:":
+			inCommands = true
+		case "Flags:", "Usage:":
+			inCommands = false
+		}
+
+		if strings.HasPrefix(line, "Usage:") || strings.HasPrefix(line, "Flags:") || strings.HasPrefix(line, "Commands:") {
+			if strings.HasPrefix(line, "Usage:") {
+				rest := strings.TrimPrefix(line, "Usage:")
+				line = "\x1b[1mUsage:\x1b[0m" + rest
+				line = strings.ReplaceAll(line, " gifgrep ", " \x1b[36mgifgrep\x1b[0m ")
+				line = reAngleToken.ReplaceAllString(line, "\x1b[90m$1\x1b[0m")
+				line = reBracketToken.ReplaceAllString(line, "$1\x1b[90m$2\x1b[0m")
+			} else {
+				line = "\x1b[1m" + line + "\x1b[0m"
+			}
+		} else {
+			line = reFlagLong.ReplaceAllString(line, "\x1b[36m$0\x1b[0m")
+			line = reFlagShort.ReplaceAllString(line, "$1\x1b[36m$2\x1b[0m$3")
+			line = reAngleToken.ReplaceAllString(line, "\x1b[90m$1\x1b[0m")
+			line = reBracketToken.ReplaceAllString(line, "$1\x1b[90m$2\x1b[0m")
+
+			if inCommands {
+				lead := len(line) - len(strings.TrimLeft(line, " "))
+				if lead >= 0 && lead < len(line) {
+					rest := line[lead:]
+					fields := strings.Fields(rest)
+					if len(fields) > 0 && !strings.HasPrefix(fields[0], "-") && fields[0] != "Run" {
+						first := fields[0]
+						idx := strings.Index(rest, first)
+						if idx >= 0 {
+							rest = rest[:idx] + "\x1b[36m" + first + "\x1b[0m" + rest[idx+len(first):]
+							line = strings.Repeat(" ", lead) + rest
+						}
+					}
+				}
+			}
+		}
+
+		out.WriteString(line)
+		out.WriteString("\n")
+	}
+	return out.String()
 }
 
 func helpWantsColor(ctx *kong.Context) bool {
