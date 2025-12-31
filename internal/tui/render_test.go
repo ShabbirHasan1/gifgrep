@@ -108,3 +108,26 @@ func TestWriteLineAtClears(t *testing.T) {
 		t.Fatalf("expected clear line")
 	}
 }
+
+func TestDrawHintsDoesNotColorWords(t *testing.T) {
+	state := &appState{
+		useColor: true,
+	}
+	layout := layout{rows: 10, cols: 120, hintsRow: 10, listCol: 1, listWidth: 120}
+
+	var buf bytes.Buffer
+	out := bufio.NewWriter(&buf)
+	drawHints(out, state, layout)
+	_ = out.Flush()
+
+	text := buf.String()
+	if strings.Contains(text, "\x1b[1m\x1b[36mD") {
+		t.Fatalf("unexpected coloring inside words")
+	}
+	if strings.Contains(text, "D\x1b[0mownload") || strings.Contains(text, "E\x1b[0mdit") {
+		t.Fatalf("unexpected ANSI reset inside words")
+	}
+	if !strings.Contains(text, "Download") || !strings.Contains(text, "Edit") {
+		t.Fatalf("expected hint labels")
+	}
+}

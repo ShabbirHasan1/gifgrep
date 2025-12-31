@@ -586,12 +586,19 @@ func drawSearch(out *bufio.Writer, state *appState, layout layout) {
 }
 
 func drawHints(out *bufio.Writer, state *appState, layout layout) {
-	hints := "⏎ Search   / Edit   ↑↓ Select   d Download   q Quit"
-	hints = styleIf(state.useColor, hints, "\x1b[90m")
-	hints = strings.ReplaceAll(hints, "⏎", styleIf(state.useColor, "⏎", "\x1b[1m", "\x1b[36m"))
-	hints = strings.ReplaceAll(hints, "↑↓", styleIf(state.useColor, "↑↓", "\x1b[1m", "\x1b[36m"))
-	hints = strings.ReplaceAll(hints, "d", styleIf(state.useColor, "d", "\x1b[1m", "\x1b[36m"))
-	hints = strings.ReplaceAll(hints, "q", styleIf(state.useColor, "q", "\x1b[1m", "\x1b[36m"))
+	formatHint := func(key, label string) string {
+		if !state.useColor {
+			return key + " " + label
+		}
+		return styleIf(true, key, "\x1b[1m", "\x1b[36m") + " " + styleIf(true, label, "\x1b[90m")
+	}
+	hints := strings.Join([]string{
+		formatHint("⏎", "Search"),
+		formatHint("/", "Edit"),
+		formatHint("↑↓", "Select"),
+		formatHint("d", "Download"),
+		formatHint("q", "Quit"),
+	}, "  ")
 	hintsOffset := 0
 	hintsWidth := layout.cols
 	if layout.showRight && layout.listCol > 1 {
