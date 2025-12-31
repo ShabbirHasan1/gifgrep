@@ -3,10 +3,12 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
 
+	"github.com/steipete/gifgrep/gifdecode"
 	"github.com/steipete/gifgrep/internal/model"
 )
 
@@ -47,5 +49,41 @@ func TestRenderPlainNoThumbs(t *testing.T) {
 	}
 	if !strings.Contains(text, "  https://example.test/a.gif") {
 		t.Fatalf("missing url: %q", text)
+	}
+}
+
+func TestRenderPlainThumbsNoExtraBlankLine(t *testing.T) {
+	prevFetch := fetchThumb
+	prevDecode := decodeThumb
+	prevSend := sendThumbFrame
+	t.Cleanup(func() {
+		fetchThumb = prevFetch
+		decodeThumb = prevDecode
+		sendThumbFrame = prevSend
+	})
+
+	fetchThumb = func(_ string) ([]byte, error) { return []byte("gif"), nil }
+	decodeThumb = func(_ []byte) (*gifdecode.Frames, error) {
+		return &gifdecode.Frames{Frames: []gifdecode.Frame{{PNG: []byte{1}}}}, nil
+	}
+	sendThumbFrame = func(out *bufio.Writer, id uint32, _ gifdecode.Frame, _, _ int) {
+		_, _ = fmt.Fprintf(out, "<IMG%d>", id)
+	}
+
+	var buf bytes.Buffer
+	out := bufio.NewWriter(&buf)
+
+	renderPlain(out, model.Options{}, false, true, []model.Result{
+		{Title: "A", URL: "https://example.test/a.gif"},
+		{Title: "B", URL: "https://example.test/b.gif"},
+	})
+	_ = out.Flush()
+
+	text := buf.String()
+	if !strings.Contains(text, "<IMG1>") || !strings.Contains(text, "<IMG2>") {
+		t.Fatalf("expected image markers: %q", text)
+	}
+	if strings.Contains(text, "\n\n<IMG2>") {
+		t.Fatalf("unexpected blank line between thumb blocks: %q", text)
 	}
 }

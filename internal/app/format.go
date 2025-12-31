@@ -41,6 +41,18 @@ var isTerminalWriter = func(w io.Writer) bool {
 	return term.IsTerminal(int(f.Fd()))
 }
 
+var (
+	fetchThumb  = fetchURL
+	decodeThumb = func(data []byte) (*gifdecode.Frames, error) {
+		decodeOpts := gifdecode.DefaultOptions()
+		decodeOpts.MaxFrames = 1
+		return gifdecode.Decode(data, decodeOpts)
+	}
+	sendThumbFrame = func(out *bufio.Writer, id uint32, frame gifdecode.Frame, cols, rows int) {
+		kitty.SendFrame(out, id, frame, cols, rows)
+	}
+)
+
 func resolveOutputFormat(opts model.Options, stdout io.Writer) outputFormat {
 	if opts.JSON {
 		return formatJSON
@@ -136,13 +148,11 @@ func renderThumbBlock(out *bufio.Writer, id uint32, res model.Result, nPrefix, t
 	if src == "" {
 		src = res.URL
 	}
-	data, err := fetchURL(src)
+	data, err := fetchThumb(src)
 	if err != nil {
 		return err
 	}
-	decodeOpts := gifdecode.DefaultOptions()
-	decodeOpts.MaxFrames = 1
-	decoded, err := gifdecode.Decode(data, decodeOpts)
+	decoded, err := decodeThumb(data)
 	if err != nil {
 		return err
 	}
@@ -156,7 +166,7 @@ func renderThumbBlock(out *bufio.Writer, id uint32, res model.Result, nPrefix, t
 		rows = clampInt(3, 10, int(float64(cols)*0.5*float64(res.Height)/float64(res.Width)))
 	}
 
-	kitty.SendFrame(out, id, decoded.Frames[0], cols, rows)
+	sendThumbFrame(out, id, decoded.Frames[0], cols, rows)
 	for r := 0; r < rows; r++ {
 		line := ""
 		switch r {
@@ -175,7 +185,6 @@ func renderThumbBlock(out *bufio.Writer, id uint32, res model.Result, nPrefix, t
 		_, _ = fmt.Fprint(out, strings.Repeat(" ", cols+2))
 		_, _ = fmt.Fprintln(out, line)
 	}
-	_, _ = fmt.Fprintln(out)
 	return nil
 }
 
