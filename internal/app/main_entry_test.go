@@ -45,6 +45,7 @@ func TestRunArgs(t *testing.T) {
 
 	t.Run("tui", func(t *testing.T) {
 		t.Cleanup(func() { tui.SetDefaultEnvForTest(nil) })
+		t.Setenv("GIFGREP_INLINE", "kitty")
 		tui.SetDefaultEnvForTest(func() tui.Env {
 			return tui.Env{
 				In:         bytes.NewReader([]byte("q")),
