@@ -429,7 +429,9 @@ func render(state *appState, out *bufio.Writer, rows, cols int) {
 	state.lastShowRight = layout.showRight
 
 	if state.inline == termcaps.InlineIterm && layout.showRight {
-		clearItermOutsidePreviewFn(out, layout)
+		if shouldSendItermPreview(state, layout) {
+			eraseItermContentAreaFn(out, layout)
+		}
 	}
 
 	drawList(out, state, layout)
@@ -975,25 +977,32 @@ func clearItermGapColumn(out *bufio.Writer, layout layout) {
 	restoreCursor(out)
 }
 
-func clearItermOutsidePreview(out *bufio.Writer, layout layout) {
-	if out == nil || !layout.showRight || !layout.hasContent || layout.previewCols <= 0 || layout.clearWidth <= 0 {
+func shouldSendItermPreview(state *appState, layout layout) bool {
+	if state == nil || state.inline != termcaps.InlineIterm || !layout.showRight {
+		return false
+	}
+	if state.currentAnim == nil || layout.previewCols <= 0 || layout.previewRows <= 0 {
+		return false
+	}
+	if state.previewNeedsSend || state.previewDirty {
+		return true
+	}
+	if state.lastPreview.cols != layout.previewCols || state.lastPreview.rows != layout.previewRows {
+		return true
+	}
+	return false
+}
+
+func eraseItermContentArea(out *bufio.Writer, layout layout) {
+	if out == nil || !layout.hasContent || layout.contentHeight <= 0 {
 		return
 	}
-	previewTop := layout.previewRow
-	previewBottom := layout.previewRow + layout.previewRows - 1
-	if layout.previewRows <= 0 {
-		previewTop = layout.contentTop
-		previewBottom = layout.contentBottom
-	}
-
 	saveCursor(out)
 	for row := layout.contentTop; row <= layout.contentBottom; row++ {
-		if row >= previewTop && row <= previewBottom {
-			continue
-		}
-		writeLineAt(out, row, 1, "", layout.clearWidth)
+		moveCursor(out, row, 1)
+		_, _ = fmt.Fprint(out, "\x1b[2K")
 	}
 	restoreCursor(out)
 }
 
-var clearItermOutsidePreviewFn = clearItermOutsidePreview
+var eraseItermContentAreaFn = eraseItermContentArea

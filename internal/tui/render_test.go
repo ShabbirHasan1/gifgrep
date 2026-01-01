@@ -158,12 +158,12 @@ func TestDrawPreviewItermClearsNewRectOnExpand(t *testing.T) {
 	}
 }
 
-func TestRenderItermClearsOutsidePreviewRows(t *testing.T) {
-	prev := clearItermOutsidePreviewFn
-	t.Cleanup(func() { clearItermOutsidePreviewFn = prev })
+func TestRenderItermErasesContentOnSend(t *testing.T) {
+	prev := eraseItermContentAreaFn
+	t.Cleanup(func() { eraseItermContentAreaFn = prev })
 
 	var clears int
-	clearItermOutsidePreviewFn = func(_ *bufio.Writer, _ layout) { clears++ }
+	eraseItermContentAreaFn = func(_ *bufio.Writer, _ layout) { clears++ }
 
 	state := &appState{
 		mode:   modeBrowse,
@@ -180,9 +180,13 @@ func TestRenderItermClearsOutsidePreviewRows(t *testing.T) {
 	out := bufio.NewWriter(&buf)
 
 	render(state, out, 20, 120)
+	if clears != 1 {
+		t.Fatalf("expected 1 erase on send, got %d", clears)
+	}
+
 	render(state, out, 20, 120)
-	if clears != 2 {
-		t.Fatalf("expected 2 outside-preview clears, got %d", clears)
+	if clears != 1 {
+		t.Fatalf("expected no extra erase without send, got %d", clears)
 	}
 }
 
