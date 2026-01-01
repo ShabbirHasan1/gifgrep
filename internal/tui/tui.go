@@ -727,6 +727,9 @@ func drawPreview(state *appState, out *bufio.Writer, cols, rows int, row, col in
 		if !state.previewNeedsSend && !state.previewDirty && state.lastPreview.cols == cols && state.lastPreview.rows == rows {
 			return
 		}
+		if state.itermLast.cols > 0 && state.itermLast.rows > 0 {
+			clearItermRectFn(out, state.itermLast.row, state.itermLast.col, state.itermLast.cols, state.itermLast.rows)
+		}
 		saveCursor(out)
 		moveCursor(out, row, col)
 		iterm.SendInlineFile(out, iterm.File{
@@ -740,6 +743,10 @@ func drawPreview(state *appState, out *bufio.Writer, cols, rows int, row, col in
 		state.previewDirty = false
 		state.lastPreview.cols = cols
 		state.lastPreview.rows = rows
+		state.itermLast.row = row
+		state.itermLast.col = col
+		state.itermLast.cols = cols
+		state.itermLast.rows = rows
 		return
 	}
 	if len(state.currentAnim.Frames) == 0 {
@@ -881,3 +888,24 @@ func showCursor(out *bufio.Writer) {
 func clearImages(out *bufio.Writer) {
 	_, _ = fmt.Fprint(out, "\x1b_Ga=d\x1b\\")
 }
+
+func clearItermRect(out *bufio.Writer, row, col, cols, rows int) {
+	if out == nil || cols <= 0 || rows <= 0 {
+		return
+	}
+	if row < 1 {
+		row = 1
+	}
+	if col < 1 {
+		col = 1
+	}
+	blank := strings.Repeat(" ", cols)
+	saveCursor(out)
+	for i := 0; i < rows; i++ {
+		moveCursor(out, row+i, col)
+		_, _ = fmt.Fprint(out, blank)
+	}
+	restoreCursor(out)
+}
+
+var clearItermRectFn = clearItermRect

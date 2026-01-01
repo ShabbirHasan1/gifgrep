@@ -98,6 +98,38 @@ func TestRenderKeepsClearingKittyPreview(t *testing.T) {
 	}
 }
 
+func TestDrawPreviewItermClearsOldRectOnResend(t *testing.T) {
+	prev := clearItermRectFn
+	t.Cleanup(func() { clearItermRectFn = prev })
+
+	var clears int
+	clearItermRectFn = func(_ *bufio.Writer, _, _, _, _ int) { clears++ }
+
+	state := &appState{
+		inline: termcaps.InlineIterm,
+		currentAnim: &gifAnimation{
+			ID:     1,
+			RawGIF: []byte("GIF89a\x01\x00\x01\x00"),
+			Width:  1,
+			Height: 1,
+		},
+		previewNeedsSend: true,
+	}
+	var buf bytes.Buffer
+	out := bufio.NewWriter(&buf)
+
+	drawPreview(state, out, 20, 8, 2, 2) // first send (no clear)
+	if clears != 0 {
+		t.Fatalf("expected 0 clears on first send, got %d", clears)
+	}
+
+	state.previewDirty = true
+	drawPreview(state, out, 20, 8, 2, 2) // resend -> should clear previous rect
+	if clears != 1 {
+		t.Fatalf("expected 1 clear on resend, got %d", clears)
+	}
+}
+
 func TestRenderWithPreviewRight(t *testing.T) {
 	state := &appState{
 		mode:    modeBrowse,

@@ -52,6 +52,12 @@ type appState struct {
 		cols int
 		rows int
 	}
+	itermLast struct {
+		row  int
+		col  int
+		cols int
+		rows int
+	}
 	previewNeedsSend      bool
 	previewDirty          bool
 	nextImageID           uint32
