@@ -641,14 +641,10 @@ func drawHints(out *bufio.Writer, state *appState, layout layout) {
 		formatHint("f", "Reveal"),
 		formatHint("q", "Quit"),
 	}, "  ")
-	hintsOffset := 0
-	hintsWidth := layout.cols
-	if layout.showRight && layout.listCol > 1 {
-		hintsOffset = layout.listCol - 1
-		hintsWidth = layout.listWidth
-	}
-	pad := maxInt(0, (hintsWidth-visibleRuneLen(hints))/2)
-	line := strings.Repeat(" ", hintsOffset+pad) + hints
+	// Hints live below the content area; center across the full terminal width,
+	// even when the content is split (preview left / list right).
+	pad := maxInt(0, (layout.cols-visibleRuneLen(hints))/2)
+	line := strings.Repeat(" ", pad) + hints
 	writeLineAt(out, layout.hintsRow, 1, line, layout.cols)
 }
 
