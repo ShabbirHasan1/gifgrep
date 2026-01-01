@@ -9,6 +9,7 @@
 - TUI: `f` (reveal) now auto-downloads the selected GIF if needed, then reveals it.
 - TUI: avoid emitting Kitty graphics sequences on unsupported terminals (no more base64 spew).
 - TUI: when inline images aren’t supported, exit with a helpful “supported terminals / protocol” message.
+- Inline detection: use Kitty graphics query (a=q) when available to avoid false positives.
 
 ### Dev
 - Replace pnpm workflow with `make` + npm (`make snap`, `make gifgrep ...`).

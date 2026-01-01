@@ -86,7 +86,7 @@ func runWith(env Env, opts model.Options, query string) error {
 		return ErrNotTerminal
 	}
 
-	inline := termcaps.DetectInline(os.Getenv)
+	inline := termcaps.DetectInlineRobust(os.Getenv)
 	if inline == termcaps.InlineNone {
 		return errUnsupportedInline(os.Getenv)
 	}

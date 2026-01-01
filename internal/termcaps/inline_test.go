@@ -45,3 +45,33 @@ func TestDetectInlineItermEnv(t *testing.T) {
 		t.Fatalf("expected iterm, got %v", got)
 	}
 }
+
+func TestDetectInlineRobustProbeNegative(t *testing.T) {
+	getenv := func(k string) string {
+		switch k {
+		case "TERM":
+			return "xterm-kitty"
+		default:
+			return ""
+		}
+	}
+	got := detectInlineRobust(getenv, func() kittyProbeResult { return kittyProbeNotSupported })
+	if got != InlineNone {
+		t.Fatalf("expected none, got %v", got)
+	}
+}
+
+func TestDetectInlineRobustProbeUnknownKeepsKitty(t *testing.T) {
+	getenv := func(k string) string {
+		switch k {
+		case "TERM":
+			return "xterm-kitty"
+		default:
+			return ""
+		}
+	}
+	got := detectInlineRobust(getenv, func() kittyProbeResult { return kittyProbeUnknown })
+	if got != InlineKitty {
+		t.Fatalf("expected kitty, got %v", got)
+	}
+}

@@ -96,11 +96,11 @@ func thumbsProtocol(opts model.Options, stdout io.Writer, format outputFormat) t
 	case thumbsNever:
 		return termcaps.InlineNone
 	case thumbsAlways:
-		return termcaps.DetectInline(os.Getenv)
+		return termcaps.DetectInlineRobust(os.Getenv)
 	case thumbsAuto:
-		return termcaps.DetectInline(os.Getenv)
+		return termcaps.DetectInlineRobust(os.Getenv)
 	}
-	return termcaps.DetectInline(os.Getenv)
+	return termcaps.DetectInlineRobust(os.Getenv)
 }
 
 func renderPlain(
