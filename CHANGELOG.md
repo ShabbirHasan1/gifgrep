@@ -11,6 +11,7 @@
 - TUI: when inline images aren’t supported, exit with a helpful “supported terminals / protocol” message.
 - Inline detection: use Kitty graphics query (a=q) when available to avoid false positives.
 - TUI: fix hint row centering for wide glyphs (emoji/symbols).
+- iTerm2: keep animated previews running after UI redraws (don’t clear preview every render).
 
 ### Dev
 - Replace pnpm workflow with `make` + npm (`make snap`, `make gifgrep ...`).

@@ -408,8 +408,15 @@ func render(state *appState, out *bufio.Writer, rows, cols int) {
 	}
 
 	if layout.clearWidth > 0 {
-		clearPreviewArea(out, layout)
+		// When switching from bottom-preview to split-preview, clear the left area once
+		// so old list rows don't show through. For Kitty, it's cheap to clear every render;
+		// for iTerm images (inline in the text grid), clearing would erase the image.
+		if state.inline == termcaps.InlineKitty || !state.lastShowRight {
+			clearPreviewArea(out, layout)
+		}
 	}
+
+	state.lastShowRight = layout.showRight
 
 	drawList(out, state, layout)
 	drawPreviewIfNeeded(out, state, layout)

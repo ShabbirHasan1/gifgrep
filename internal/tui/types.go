@@ -31,23 +31,24 @@ type gifCacheEntry struct {
 }
 
 type appState struct {
-	query       string
-	tagline     string
-	results     []model.Result
-	selected    int
-	scroll      int
-	mode        mode
-	status      string
-	currentAnim *gifAnimation
-	inline      termcaps.InlineProtocol
-	cache       map[string]*gifCacheEntry
-	savedPaths  map[string]string
-	renderDirty bool
-	lastRows    int
-	lastCols    int
-	previewRow  int
-	previewCol  int
-	lastPreview struct {
+	query         string
+	tagline       string
+	results       []model.Result
+	selected      int
+	scroll        int
+	mode          mode
+	status        string
+	currentAnim   *gifAnimation
+	inline        termcaps.InlineProtocol
+	cache         map[string]*gifCacheEntry
+	savedPaths    map[string]string
+	renderDirty   bool
+	lastShowRight bool
+	lastRows      int
+	lastCols      int
+	previewRow    int
+	previewCol    int
+	lastPreview   struct {
 		cols int
 		rows int
 	}
