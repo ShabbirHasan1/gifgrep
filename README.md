@@ -118,6 +118,7 @@ See `docs/gif-sources.md`.
 make test
 make gifgrep GIFGREP_ARGS="--help"
 make gifgrep -- --version
+make gifgrep-fresh tui skynet
 ```
 
 Ghostty web snapshot:
