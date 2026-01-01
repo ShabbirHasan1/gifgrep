@@ -13,6 +13,7 @@
 
 ### Dev
 - Replace pnpm workflow with `make` + npm (`make snap`, `make gifgrep ...`).
+- Add macOS terminal capability e2e smoke: `make termcaps-e2e`.
 
 ### Docs
 - Add `docs/kitty.md` and `docs/iterm.md` (protocol notes).

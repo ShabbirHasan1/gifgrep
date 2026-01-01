@@ -32,6 +32,9 @@ cover:
 snap:
 	node scripts/ghostty-web-snap.mjs
 
+termcaps-e2e:
+	bash scripts/termcaps-e2e-macos.sh
+
 node-deps:
 	npm install
 
