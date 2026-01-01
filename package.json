@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "make bin/gifgrep && bin/gifgrep",
-    "gifgrep": "make bin/gifgrep && bin/gifgrep",
+    "start": "make gifgrep",
+    "gifgrep": "make gifgrep",
     "fmt": "gofumpt -w .",
     "lint": "golangci-lint run",
     "snap": "node scripts/ghostty-web-snap.mjs",
