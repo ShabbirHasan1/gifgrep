@@ -153,35 +153,15 @@ func runSearch(stdout io.Writer, stderr io.Writer, opts model.Options, query str
 	if strings.TrimSpace(query) == "" {
 		return errors.New("missing query")
 	}
-	if opts.Verbose > 0 && !opts.Quiet {
-		_, _ = fmt.Fprintf(stderr, "source=%s max=%d\n", search.ResolveSource(opts.Source), opts.Limit)
-	}
+	logSearchConfig(stderr, opts)
 
 	results, err := search.Search(query, opts)
 	if err != nil {
 		return err
 	}
 
-	var lastSaved string
-	if opts.Download {
-		for _, res := range results {
-			if res.URL == "" {
-				continue
-			}
-			savedPath, err := download.ToDownloads(res)
-			if err != nil {
-				return err
-			}
-			lastSaved = savedPath
-			if opts.Verbose > 0 && !opts.Quiet {
-				_, _ = fmt.Fprintf(stderr, "saved %s\n", savedPath)
-			}
-		}
-		if opts.Reveal && lastSaved != "" {
-			if err := reveal.Reveal(lastSaved); err != nil {
-				return err
-			}
-		}
+	if err := downloadSearchResults(results, opts, stderr); err != nil {
+		return err
 	}
 
 	format := resolveOutputFormat(opts, stdout)
@@ -195,19 +175,63 @@ func runSearch(stdout io.Writer, stderr io.Writer, opts model.Options, query str
 
 	useColor := shouldUseColor(opts, stdout)
 	thumbs := thumbsProtocol(opts, stdout, format)
-	termCols := 0
-	if thumbs != termcaps.InlineNone {
-		if f, ok := stdout.(*os.File); ok {
-			if cols, _, err := term.GetSize(int(f.Fd())); err == nil && cols > 0 {
-				termCols = cols
-			}
-		}
+	termCols := termColumns(stdout, thumbs)
+
+	writeSearchResults(out, opts, useColor, thumbs, results, termCols, format)
+	return nil
+}
+
+func logSearchConfig(stderr io.Writer, opts model.Options) {
+	if opts.Verbose > 0 && !opts.Quiet {
+		_, _ = fmt.Fprintf(stderr, "source=%s max=%d\n", search.ResolveSource(opts.Source), opts.Limit)
+	}
+}
+
+func downloadSearchResults(results []model.Result, opts model.Options, stderr io.Writer) error {
+	if !opts.Download {
+		return nil
 	}
 
+	var lastSaved string
+	for _, res := range results {
+		if res.URL == "" {
+			continue
+		}
+		savedPath, err := download.ToDownloads(res)
+		if err != nil {
+			return err
+		}
+		lastSaved = savedPath
+		if opts.Verbose > 0 && !opts.Quiet {
+			_, _ = fmt.Fprintf(stderr, "saved %s\n", savedPath)
+		}
+	}
+	if opts.Reveal && lastSaved != "" {
+		return reveal.Reveal(lastSaved)
+	}
+	return nil
+}
+
+func termColumns(w io.Writer, thumbs termcaps.InlineProtocol) int {
+	if thumbs == termcaps.InlineNone {
+		return 0
+	}
+	f, ok := w.(*os.File)
+	if !ok {
+		return 0
+	}
+	cols, _, err := term.GetSize(int(f.Fd()))
+	if err != nil || cols <= 0 {
+		return 0
+	}
+	return cols
+}
+
+func writeSearchResults(out *bufio.Writer, opts model.Options, useColor bool, thumbs termcaps.InlineProtocol, results []model.Result, termCols int, format outputFormat) {
 	switch format {
 	case formatPlain:
 		renderPlain(out, opts, useColor, thumbs, results, termCols)
-		return nil
+		return
 	case formatURL:
 		for i, res := range results {
 			url := res.URL
@@ -217,7 +241,7 @@ func runSearch(stdout io.Writer, stderr io.Writer, opts model.Options, query str
 			}
 			_, _ = fmt.Fprintln(out, url)
 		}
-		return nil
+		return
 	case formatMD:
 		for i, res := range results {
 			title := normalizeTitle(res)
@@ -228,7 +252,7 @@ func runSearch(stdout io.Writer, stderr io.Writer, opts model.Options, query str
 			}
 			_, _ = fmt.Fprintf(out, "%s[%s](%s)\n", prefix, title, url)
 		}
-		return nil
+		return
 	case formatComment:
 		for i, res := range results {
 			title := normalizeTitle(res)
@@ -239,10 +263,10 @@ func runSearch(stdout io.Writer, stderr io.Writer, opts model.Options, query str
 			}
 			_, _ = fmt.Fprintf(out, "%s  # %s\n", url, title)
 		}
-		return nil
+		return
 	case formatJSON:
-		// handled above
-		return nil
+		// handled by caller
+		return
 	case formatTSV, formatAuto:
 		fallthrough
 	default:
@@ -259,7 +283,7 @@ func runSearch(stdout io.Writer, stderr io.Writer, opts model.Options, query str
 			}
 			_, _ = fmt.Fprintf(out, "%s\t%s\n", title, url)
 		}
-		return nil
+		return
 	}
 }
 

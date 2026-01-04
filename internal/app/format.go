@@ -149,105 +149,24 @@ func renderPlain(
 }
 
 func renderThumbBlock(out *bufio.Writer, thumbs termcaps.InlineProtocol, id uint32, res model.Result, nPrefix, title, url string, useColor bool, termCols int) error {
-	src := res.PreviewURL
-	if src == "" {
-		src = res.URL
-	}
-	data, err := fetchThumb(src)
+	data, src, err := fetchThumbForResult(res)
 	if err != nil {
 		return err
 	}
+	cols, rows := thumbBlockSize(thumbs, data, res)
 
-	cols := 16
-	rows := 8
-	if w, h := thumbDims(data, res); w > 0 && h > 0 {
-		if thumbs != termcaps.InlineIterm {
-			rows = clampInt(3, 10, int(float64(cols)*0.5*float64(h)/float64(w)))
-		}
+	data, err = prepareThumbData(thumbs, data, src, res)
+	if err != nil {
+		return err
+	}
+	if err := sendThumb(out, thumbs, id, data, cols, rows); err != nil {
+		return err
 	}
 
-	switch thumbs {
-	case termcaps.InlineNone:
-		return fmt.Errorf("inline thumbnails not supported")
-	case termcaps.InlineIterm:
-		if !isSupportedItermImage(data) && src != res.URL && res.URL != "" {
-			if fallback, err := fetchThumb(res.URL); err == nil {
-				data = fallback
-			}
-		}
-		if !isSupportedItermImage(data) {
-			return fmt.Errorf("unsupported image")
-		}
-		if len(data) == 0 {
-			return fmt.Errorf("empty image")
-		}
-		_, _ = fmt.Fprint(out, "\r")
-		sendThumbIterm(out, data, cols, rows)
-		if rows > 1 {
-			_, _ = fmt.Fprintf(out, "\x1b[%dA", rows-1)
-		}
-	case termcaps.InlineKitty:
-		decoded, err := decodeThumb(data)
-		if err != nil {
-			return err
-		}
-		if decoded == nil || len(decoded.Frames) == 0 {
-			return fmt.Errorf("no frames")
-		}
-		sendThumbKitty(out, id, decoded.Frames[0], cols, rows)
-	}
-
-	indentCols := cols + 2
-	if thumbs == termcaps.InlineIterm {
-		indentCols = cols
-	}
-	textWidth := termCols - indentCols - 1
-	if termCols <= 0 || textWidth <= 0 {
-		textWidth = 0
-	}
-
-	titleLine := nPrefix + title
-	titleLine = truncateText(titleLine, textWidth)
-
-	urlLines := []string{url}
-	if textWidth > 0 {
-		urlLines = wrapText(url, textWidth)
-	}
-	if len(urlLines) > rows-1 {
-		urlLines = urlLines[:rows-1]
-		urlLines[len(urlLines)-1] = truncateText(urlLines[len(urlLines)-1]+"…", textWidth)
-	}
-
-	for r := 0; r < rows; r++ {
-		line := ""
-		switch r {
-		case 0:
-			line = titleLine
-			if useColor {
-				line = "\x1b[1m" + line + "\x1b[0m"
-			}
-		default:
-			if i := r - 1; i >= 0 && i < len(urlLines) {
-				line = urlLines[i]
-				if useColor {
-					line = "\x1b[36m" + line + "\x1b[0m"
-				}
-			}
-		}
-		if thumbs == termcaps.InlineIterm {
-			col := indentCols + 1
-			if col < 1 {
-				col = 1
-			}
-			_, _ = fmt.Fprintf(out, "\x1b[%dG", col)
-			_, _ = fmt.Fprint(out, line)
-			_, _ = fmt.Fprint(out, "\x1b[K\n")
-			continue
-		}
-
-		_, _ = fmt.Fprint(out, strings.Repeat(" ", indentCols))
-		_, _ = fmt.Fprintln(out, line)
-	}
+	indentCols := thumbIndentCols(thumbs, cols)
+	textWidth := thumbTextWidth(termCols, indentCols)
+	titleLine, urlLines := thumbTextLines(nPrefix, title, url, rows, textWidth)
+	writeThumbTextBlock(out, thumbs, rows, indentCols, titleLine, urlLines, useColor)
 	return nil
 }
 
@@ -330,6 +249,145 @@ func isJPEGData(data []byte) bool {
 
 func isSupportedItermImage(data []byte) bool {
 	return isGIFData(data) || isPNGData(data) || isJPEGData(data)
+}
+
+func fetchThumbForResult(res model.Result) ([]byte, string, error) {
+	src := res.PreviewURL
+	if src == "" {
+		src = res.URL
+	}
+	data, err := fetchThumb(src)
+	if err != nil {
+		return nil, "", err
+	}
+	return data, src, nil
+}
+
+func thumbBlockSize(thumbs termcaps.InlineProtocol, data []byte, res model.Result) (int, int) {
+	cols := 16
+	rows := 8
+	if w, h := thumbDims(data, res); w > 0 && h > 0 {
+		if thumbs != termcaps.InlineIterm {
+			rows = clampInt(3, 10, int(float64(cols)*0.5*float64(h)/float64(w)))
+		}
+	}
+	return cols, rows
+}
+
+func prepareThumbData(thumbs termcaps.InlineProtocol, data []byte, src string, res model.Result) ([]byte, error) {
+	switch thumbs {
+	case termcaps.InlineNone:
+		return nil, fmt.Errorf("inline thumbnails not supported")
+	case termcaps.InlineIterm:
+		if !isSupportedItermImage(data) && src != res.URL && res.URL != "" {
+			if fallback, err := fetchThumb(res.URL); err == nil {
+				data = fallback
+			}
+		}
+		if len(data) == 0 {
+			return nil, fmt.Errorf("empty image")
+		}
+		if !isSupportedItermImage(data) {
+			return nil, fmt.Errorf("unsupported image")
+		}
+		return data, nil
+	case termcaps.InlineKitty:
+		if len(data) == 0 {
+			return nil, fmt.Errorf("empty image")
+		}
+		return data, nil
+	default:
+		return nil, fmt.Errorf("inline thumbnails not supported")
+	}
+}
+
+func sendThumb(out *bufio.Writer, thumbs termcaps.InlineProtocol, id uint32, data []byte, cols, rows int) error {
+	switch thumbs {
+	case termcaps.InlineNone:
+		return fmt.Errorf("inline thumbnails not supported")
+	case termcaps.InlineIterm:
+		_, _ = fmt.Fprint(out, "\r")
+		sendThumbIterm(out, data, cols, rows)
+		if rows > 1 {
+			_, _ = fmt.Fprintf(out, "\x1b[%dA", rows-1)
+		}
+		return nil
+	case termcaps.InlineKitty:
+		decoded, err := decodeThumb(data)
+		if err != nil {
+			return err
+		}
+		if decoded == nil || len(decoded.Frames) == 0 {
+			return fmt.Errorf("no frames")
+		}
+		sendThumbKitty(out, id, decoded.Frames[0], cols, rows)
+		return nil
+	default:
+		return fmt.Errorf("inline thumbnails not supported")
+	}
+}
+
+func thumbIndentCols(thumbs termcaps.InlineProtocol, cols int) int {
+	if thumbs == termcaps.InlineIterm {
+		return cols
+	}
+	return cols + 2
+}
+
+func thumbTextWidth(termCols int, indentCols int) int {
+	textWidth := termCols - indentCols - 1
+	if termCols <= 0 || textWidth <= 0 {
+		return 0
+	}
+	return textWidth
+}
+
+func thumbTextLines(nPrefix, title, url string, rows int, textWidth int) (string, []string) {
+	titleLine := truncateText(nPrefix+title, textWidth)
+
+	urlLines := []string{url}
+	if textWidth > 0 {
+		urlLines = wrapText(url, textWidth)
+	}
+	if len(urlLines) > rows-1 {
+		urlLines = urlLines[:rows-1]
+		urlLines[len(urlLines)-1] = truncateText(urlLines[len(urlLines)-1]+"…", textWidth)
+	}
+	return titleLine, urlLines
+}
+
+func writeThumbTextBlock(out *bufio.Writer, thumbs termcaps.InlineProtocol, rows, indentCols int, titleLine string, urlLines []string, useColor bool) {
+	for r := 0; r < rows; r++ {
+		line := ""
+		switch r {
+		case 0:
+			line = titleLine
+			if useColor {
+				line = "\x1b[1m" + line + "\x1b[0m"
+			}
+		default:
+			if i := r - 1; i >= 0 && i < len(urlLines) {
+				line = urlLines[i]
+				if useColor {
+					line = "\x1b[36m" + line + "\x1b[0m"
+				}
+			}
+		}
+
+		if thumbs == termcaps.InlineIterm {
+			col := indentCols + 1
+			if col < 1 {
+				col = 1
+			}
+			_, _ = fmt.Fprintf(out, "\x1b[%dG", col)
+			_, _ = fmt.Fprint(out, line)
+			_, _ = fmt.Fprint(out, "\x1b[K\n")
+			continue
+		}
+
+		_, _ = fmt.Fprint(out, strings.Repeat(" ", indentCols))
+		_, _ = fmt.Fprintln(out, line)
+	}
 }
 
 func truncateText(s string, width int) string {

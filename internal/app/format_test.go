@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -118,7 +119,7 @@ func TestRenderPlainThumbsItermUsesRawGIF(t *testing.T) {
 	fetchThumb = func(_ string) ([]byte, error) { return gifData, nil }
 	decodeThumb = func(_ []byte) (*gifdecode.Frames, error) {
 		t.Fatalf("decodeThumb should not be called for iTerm")
-		return nil, nil
+		return nil, errors.New("unexpected call")
 	}
 	sendThumbIterm = func(out *bufio.Writer, data []byte, _, _ int) {
 		if string(data) != string(gifData) {
