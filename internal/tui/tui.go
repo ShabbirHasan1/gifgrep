@@ -49,20 +49,7 @@ func Run(opts model.Options, query string) error {
 	return runWith(env, opts, query)
 }
 
-func errUnsupportedInline(getenv func(string) string) error {
-	if getenv == nil {
-		getenv = os.Getenv
-	}
-	termProgram := strings.TrimSpace(getenv("TERM_PROGRAM"))
-	term := strings.TrimSpace(getenv("TERM"))
-	return fmt.Errorf(
-		"gifgrep tui needs inline image support.\n\nSupported terminals:\n  - Kitty (Kitty graphics protocol)\n  - Ghostty (Kitty graphics protocol)\n  - iTerm2 (OSC 1337 inline images)\n\nDetected:\n  TERM_PROGRAM=%q\n  TERM=%q\n\nSee: docs/kitty.md and docs/iterm.md\n\nTip: You can force detection with GIFGREP_INLINE=kitty|iterm|none",
-		termProgram,
-		term,
-	)
-}
-
-func runWith(env Env, opts model.Options, query string) error {
+func initEnvDefaults(env Env) (Env, error) {
 	if env.In == nil {
 		env.In = os.Stdin
 	}
@@ -85,45 +72,46 @@ func runWith(env Env, opts model.Options, query string) error {
 		env.FD = int(os.Stdin.Fd())
 	}
 	if !env.IsTerminal(env.FD) {
-		return ErrNotTerminal
+		return env, ErrNotTerminal
 	}
+	return env, nil
+}
 
+func detectInlineProtocol() (termcaps.InlineProtocol, error) {
 	inline := termcaps.DetectInlineRobust(os.Getenv)
 	if inline == termcaps.InlineNone {
-		return errUnsupportedInline(os.Getenv)
+		return inline, errUnsupportedInline(os.Getenv)
 	}
+	return inline, nil
+}
 
-	oldState, err := env.MakeRaw(env.FD)
-	if err != nil {
-		return err
-	}
-	if oldState != nil {
-		defer func() {
-			_ = env.Restore(env.FD, oldState)
-		}()
-	}
-
-	out := bufio.NewWriter(env.Out)
+func setupOutput(out *bufio.Writer, inline termcaps.InlineProtocol) func() {
 	hideCursor(out)
-	defer func() {
+	return func() {
 		showCursor(out)
 		if inline == termcaps.InlineKitty {
 			clearImages(out)
 		}
 		_ = out.Flush()
-	}()
-
-	sigs := env.SignalCh
-	if sigs == nil {
-		sigs = make(chan os.Signal)
 	}
+}
 
+func setupSignals(env Env) <-chan os.Signal {
+	if env.SignalCh != nil {
+		return env.SignalCh
+	}
+	return make(chan os.Signal)
+}
+
+func setupInputReader(in io.Reader) (chan inputEvent, chan struct{}) {
 	inputCh := make(chan inputEvent, 16)
-	prefetchCh := make(chan prefetchResult, 64)
 	stopCh := make(chan struct{})
-	go readInput(env.In, inputCh, stopCh)
+	go readInput(in, inputCh, stopCh)
+	return inputCh, stopCh
+}
 
-	state := &appState{
+func newAppState(inline termcaps.InlineProtocol, opts model.Options) *appState {
+	return &appState{
 		mode:            modeQuery,
 		status:          "Type a search and press Enter",
 		tagline:         pickTagline(time.Now(), os.Getenv, nil),
@@ -138,6 +126,139 @@ func runWith(env Env, opts model.Options, query string) error {
 		useColor:        opts.Color != "never",
 		opts:            opts,
 	}
+}
+
+func runInitialSearch(state *appState, query string, opts model.Options, out *bufio.Writer, prefetchCh chan<- prefetchResult) {
+	if strings.TrimSpace(query) == "" {
+		return
+	}
+	state.query = query
+	state.mode = modeBrowse
+	state.status = "Searching..."
+	render(state, out, state.lastRows, state.lastCols)
+	_ = out.Flush()
+
+	results, err := search.Search(query, opts)
+	if err != nil {
+		state.status = "Search error: " + err.Error()
+		state.renderDirty = true
+		return
+	}
+
+	state.results = results
+	state.selected = 0
+	state.scroll = 0
+	if len(results) == 0 {
+		state.status = "No results"
+		state.currentAnim = nil
+		state.previewDirty = true
+		resetPrefetch(state)
+		state.renderDirty = true
+		return
+	}
+
+	state.status = fmt.Sprintf("%d results", len(results))
+	loadSelectedImage(state)
+	resetPrefetch(state)
+	startPrefetch(state, results, prefetchCh)
+	state.renderDirty = true
+}
+
+func handlePrefetchResult(state *appState, res prefetchResult) {
+	if !acceptPrefetchResult(state, res) {
+		return
+	}
+	if state.selected < 0 || state.selected >= len(state.results) {
+		return
+	}
+	if resultKey(state.results[state.selected]) != res.key {
+		return
+	}
+	loadSelectedImage(state)
+	state.renderDirty = true
+}
+
+func updateSizeIfNeeded(state *appState, env Env) {
+	if cols, rows, err := env.GetSize(env.FD); err == nil {
+		if rows != state.lastRows || cols != state.lastCols {
+			state.lastRows = rows
+			state.lastCols = cols
+			ensureVisible(state)
+			state.renderDirty = true
+			state.previewDirty = true
+		}
+	}
+}
+
+func renderIfNeeded(state *appState, out *bufio.Writer) {
+	if !state.renderDirty {
+		return
+	}
+	render(state, out, state.lastRows, state.lastCols)
+	state.renderDirty = false
+	_ = out.Flush()
+}
+
+func handleEvents(state *appState, out *bufio.Writer, prefetchCh chan prefetchResult, inputCh <-chan inputEvent, stopCh chan struct{}, sigs <-chan os.Signal, ticker *time.Ticker) bool {
+	select {
+	case <-sigs:
+		close(stopCh)
+		return true
+	case ev := <-inputCh:
+		if handleInput(state, ev, out, prefetchCh) {
+			close(stopCh)
+			return true
+		}
+	case res := <-prefetchCh:
+		handlePrefetchResult(state, res)
+	case <-ticker.C:
+	}
+	return false
+}
+
+func errUnsupportedInline(getenv func(string) string) error {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	termProgram := strings.TrimSpace(getenv("TERM_PROGRAM"))
+	term := strings.TrimSpace(getenv("TERM"))
+	return fmt.Errorf(
+		"gifgrep tui needs inline image support.\n\nSupported terminals:\n  - Kitty (Kitty graphics protocol)\n  - Ghostty (Kitty graphics protocol)\n  - iTerm2 (OSC 1337 inline images)\n\nDetected:\n  TERM_PROGRAM=%q\n  TERM=%q\n\nSee: docs/kitty.md and docs/iterm.md\n\nTip: You can force detection with GIFGREP_INLINE=kitty|iterm|none",
+		termProgram,
+		term,
+	)
+}
+
+func runWith(env Env, opts model.Options, query string) error {
+	var err error
+	env, err = initEnvDefaults(env)
+	if err != nil {
+		return err
+	}
+
+	inline, err := detectInlineProtocol()
+	if err != nil {
+		return err
+	}
+
+	oldState, err := env.MakeRaw(env.FD)
+	if err != nil {
+		return err
+	}
+	if oldState != nil {
+		defer func() {
+			_ = env.Restore(env.FD, oldState)
+		}()
+	}
+
+	out := bufio.NewWriter(env.Out)
+	defer setupOutput(out, inline)()
+
+	sigs := setupSignals(env)
+	inputCh, stopCh := setupInputReader(env.In)
+	prefetchCh := make(chan prefetchResult, 64)
+
+	state := newAppState(inline, opts)
 	defer cleanupTempDir(state)
 	if cols, rows, err := env.GetSize(env.FD); err == nil {
 		state.lastRows = rows
@@ -147,70 +268,14 @@ func runWith(env Env, opts model.Options, query string) error {
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
-	if strings.TrimSpace(query) != "" {
-		state.query = query
-		state.mode = modeBrowse
-		state.status = "Searching..."
-		render(state, out, state.lastRows, state.lastCols)
-		_ = out.Flush()
-
-		results, err := search.Search(query, opts)
-		if err != nil {
-			state.status = "Search error: " + err.Error()
-		} else {
-			state.results = results
-			state.selected = 0
-			state.scroll = 0
-			if len(results) == 0 {
-				state.status = "No results"
-				state.currentAnim = nil
-				state.previewDirty = true
-				resetPrefetch(state)
-			} else {
-				state.status = fmt.Sprintf("%d results", len(results))
-				loadSelectedImage(state)
-				resetPrefetch(state)
-				startPrefetch(state, results, prefetchCh)
-			}
-		}
-		state.renderDirty = true
-	}
+	runInitialSearch(state, query, opts, out, prefetchCh)
 
 	for {
-		select {
-		case <-sigs:
-			close(stopCh)
+		if handleEvents(state, out, prefetchCh, inputCh, stopCh, sigs, ticker) {
 			return nil
-		case ev := <-inputCh:
-			if handleInput(state, ev, out, prefetchCh) {
-				close(stopCh)
-				return nil
-			}
-		case res := <-prefetchCh:
-			if acceptPrefetchResult(state, res) {
-				if state.selected >= 0 && state.selected < len(state.results) && resultKey(state.results[state.selected]) == res.key {
-					loadSelectedImage(state)
-					state.renderDirty = true
-				}
-			}
-		case <-ticker.C:
 		}
-
-		if cols, rows, err := env.GetSize(env.FD); err == nil {
-			if rows != state.lastRows || cols != state.lastCols {
-				state.lastRows = rows
-				state.lastCols = cols
-				ensureVisible(state)
-				state.renderDirty = true
-				state.previewDirty = true
-			}
-		}
-
-		if state.renderDirty {
-			render(state, out, state.lastRows, state.lastCols)
-			state.renderDirty = false
-			_ = out.Flush()
-		}
+		updateSizeIfNeeded(state, env)
+		renderIfNeeded(state, out)
 
 		advanceManualAnimation(state, out)
 	}
