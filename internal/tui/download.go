@@ -39,6 +39,7 @@ func downloadSelected(state *appState, out *bufio.Writer, revealAfter bool) {
 	}
 	state.lastSavedPath = filePath
 	trackSavedPath(state, item, filePath)
+	loadSelectedImage(state)
 	if revealAfter {
 		if err := revealFn(filePath); err != nil {
 			flashHeader(state, "Saved (reveal failed)")

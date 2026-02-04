@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.2.3 — Unreleased
+### Fixes
+- TUI: after download, preview reloads from the saved full-res GIF.
 
 ## 0.2.2 - 2026-01-22
 

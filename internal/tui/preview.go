@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/binary"
+	"os"
 	"time"
 
 	"github.com/steipete/gifgrep/gifdecode"
@@ -22,20 +23,34 @@ func gifSize(raw []byte) (w, h int) {
 }
 
 func loadSelectedImage(state *appState) {
+	if state.cache == nil {
+		state.cache = map[string]*gifCacheEntry{}
+	}
 	if state.selected < 0 || state.selected >= len(state.results) {
 		state.currentAnim = nil
 		state.previewDirty = true
 		return
 	}
 	item := state.results[state.selected]
-	if item.PreviewURL == "" {
+	source := item.PreviewURL
+	localPath, localOK := savedPathForResult(state, item)
+	if localOK {
+		source = localPath
+	}
+	if source == "" {
 		state.currentAnim = nil
 		state.previewDirty = true
 		return
 	}
-	entry, ok := state.cache[item.PreviewURL]
+	entry, ok := state.cache[source]
 	if !ok {
-		data, err := fetchGIF(item.PreviewURL)
+		var data []byte
+		var err error
+		if localOK {
+			data, err = os.ReadFile(localPath)
+		} else {
+			data, err = fetchGIF(source)
+		}
 		if err != nil {
 			state.status = "Image error: " + err.Error()
 			state.currentAnim = nil
@@ -54,7 +69,7 @@ func loadSelectedImage(state *appState) {
 			entry.Width = decoded.Width
 			entry.Height = decoded.Height
 		}
-		state.cache[item.PreviewURL] = entry
+		state.cache[source] = entry
 	}
 	if entry != nil && entry.Frames == nil && state.inline == termcaps.InlineKitty {
 		decoded, err := gifdecode.Decode(entry.RawGIF, gifdecode.DefaultOptions())

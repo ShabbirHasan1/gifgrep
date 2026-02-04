@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -70,4 +71,37 @@ func TestFetchGIFError(t *testing.T) {
 			t.Fatalf("expected fetch error")
 		}
 	})
+}
+
+func TestLoadSelectedImageUsesDownloadedFile(t *testing.T) {
+	data := testutil.MakeTestGIF()
+	tmp, err := os.CreateTemp(t.TempDir(), "gifgrep-*.gif")
+	if err != nil {
+		t.Fatalf("temp file: %v", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("write temp gif: %v", err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatalf("close temp gif: %v", err)
+	}
+
+	state := &appState{
+		results: []model.Result{{
+			ID:         "id1",
+			Title:      "cached",
+			URL:        "https://example.test/full.gif",
+			PreviewURL: "https://example.test/preview.gif",
+		}},
+		selected:   0,
+		inline:     termcaps.InlineKitty,
+		cache:      map[string]*gifCacheEntry{},
+		savedPaths: map[string]string{"id:id1": tmp.Name()},
+	}
+	testutil.WithTransport(t, &errTransport{}, func() {
+		loadSelectedImage(state)
+	})
+	if state.currentAnim == nil || len(state.currentAnim.RawGIF) == 0 {
+		t.Fatalf("expected animation from downloaded file")
+	}
 }
