@@ -44,6 +44,10 @@ type appState struct {
 	inline        termcaps.InlineProtocol
 	cache         map[string]*gifCacheEntry
 	savedPaths    map[string]string
+	tempPaths     map[string]string
+	tempDir       string
+	prefetchGen   int
+	prefetching   map[string]bool
 	renderDirty   bool
 	lastShowRight bool
 	lastRows      int

@@ -60,7 +60,7 @@ func TestHandleInputAndLoad(t *testing.T) {
 		var buf bytes.Buffer
 		out := bufio.NewWriter(&buf)
 
-		handleInput(state, inputEvent{kind: keyEnter}, out)
+		handleInput(state, inputEvent{kind: keyEnter}, out, nil)
 
 		if state.mode != modeBrowse {
 			t.Fatalf("expected browse mode")
@@ -74,62 +74,62 @@ func TestHandleInputAndLoad(t *testing.T) {
 
 		state.results = append(state.results, model.Result{Title: "Second", PreviewURL: state.results[0].PreviewURL})
 		state.selected = 0
-		handleInput(state, inputEvent{kind: keyDown}, out)
+		handleInput(state, inputEvent{kind: keyDown}, out, nil)
 		if state.selected != 1 {
 			t.Fatalf("expected selection to move down")
 		}
 
 		state.mode = modeBrowse
-		handleInput(state, inputEvent{kind: keyUp}, out)
+		handleInput(state, inputEvent{kind: keyUp}, out, nil)
 		if state.selected != 0 {
 			t.Fatalf("expected selection to move up")
 		}
 
 		state.mode = modeBrowse
-		handleInput(state, inputEvent{kind: keyEnter}, out)
+		handleInput(state, inputEvent{kind: keyEnter}, out, nil)
 		if state.mode != modeQuery {
 			t.Fatalf("expected query mode on enter")
 		}
 
-		handleInput(state, inputEvent{kind: keyRune, ch: '/'}, out)
+		handleInput(state, inputEvent{kind: keyRune, ch: '/'}, out, nil)
 		if state.mode != modeQuery {
 			t.Fatalf("expected query mode")
 		}
 
 		state.results = []model.Result{{Title: "A"}}
-		handleInput(state, inputEvent{kind: keyEsc}, out)
+		handleInput(state, inputEvent{kind: keyEsc}, out, nil)
 		if state.mode != modeBrowse {
 			t.Fatalf("expected browse mode on esc")
 		}
 
 		state.mode = modeBrowse
-		handleInput(state, inputEvent{kind: keyEsc}, out)
+		handleInput(state, inputEvent{kind: keyEsc}, out, nil)
 		if state.mode != modeQuery {
 			t.Fatalf("expected query mode on esc")
 		}
 
 		state.mode = modeQuery
 		state.query = "c"
-		handleInput(state, inputEvent{kind: keyBackspace}, out)
+		handleInput(state, inputEvent{kind: keyBackspace}, out, nil)
 		if state.query != "" {
 			t.Fatalf("expected backspace to remove query")
 		}
 
 		state.mode = modeQuery
-		if !handleInput(state, inputEvent{kind: keyRune, ch: 'q'}, out) {
+		if !handleInput(state, inputEvent{kind: keyRune, ch: 'q'}, out, nil) {
 			t.Fatalf("expected quit on q")
 		}
 
 		state.mode = modeQuery
 		state.results = []model.Result{{Title: "A"}}
-		handleInput(state, inputEvent{kind: keyEsc}, out)
+		handleInput(state, inputEvent{kind: keyEsc}, out, nil)
 		if state.mode != modeBrowse {
 			t.Fatalf("expected browse mode on esc with results")
 		}
 
 		state.mode = modeBrowse
 		state.selected = len(state.results) - 1
-		handleInput(state, inputEvent{kind: keyDown}, out)
+		handleInput(state, inputEvent{kind: keyDown}, out, nil)
 		if state.selected != len(state.results)-1 {
 			t.Fatalf("expected selection to stay at end")
 		}

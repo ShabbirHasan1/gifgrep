@@ -36,6 +36,10 @@ func loadSelectedImage(state *appState) {
 	localPath, localOK := savedPathForResult(state, item)
 	if localOK {
 		source = localPath
+	} else if tempPath, ok := tempPathForResult(state, item); ok {
+		source = tempPath
+		localPath = tempPath
+		localOK = true
 	}
 	if source == "" {
 		state.currentAnim = nil

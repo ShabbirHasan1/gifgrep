@@ -119,6 +119,7 @@ func runWith(env Env, opts model.Options, query string) error {
 	}
 
 	inputCh := make(chan inputEvent, 16)
+	prefetchCh := make(chan prefetchResult, 64)
 	stopCh := make(chan struct{})
 	go readInput(env.In, inputCh, stopCh)
 
@@ -128,6 +129,8 @@ func runWith(env Env, opts model.Options, query string) error {
 		tagline:         pickTagline(time.Now(), os.Getenv, nil),
 		cache:           map[string]*gifCacheEntry{},
 		savedPaths:      map[string]string{},
+		tempPaths:       map[string]string{},
+		prefetching:     map[string]bool{},
 		renderDirty:     true,
 		nextImageID:     1,
 		inline:          inline,
@@ -135,6 +138,7 @@ func runWith(env Env, opts model.Options, query string) error {
 		useColor:        opts.Color != "never",
 		opts:            opts,
 	}
+	defer cleanupTempDir(state)
 	if cols, rows, err := env.GetSize(env.FD); err == nil {
 		state.lastRows = rows
 		state.lastCols = cols
@@ -161,9 +165,12 @@ func runWith(env Env, opts model.Options, query string) error {
 				state.status = "No results"
 				state.currentAnim = nil
 				state.previewDirty = true
+				resetPrefetch(state)
 			} else {
 				state.status = fmt.Sprintf("%d results", len(results))
 				loadSelectedImage(state)
+				resetPrefetch(state)
+				startPrefetch(state, results, prefetchCh)
 			}
 		}
 		state.renderDirty = true
@@ -175,9 +182,16 @@ func runWith(env Env, opts model.Options, query string) error {
 			close(stopCh)
 			return nil
 		case ev := <-inputCh:
-			if handleInput(state, ev, out) {
+			if handleInput(state, ev, out, prefetchCh) {
 				close(stopCh)
 				return nil
+			}
+		case res := <-prefetchCh:
+			if acceptPrefetchResult(state, res) {
+				if state.selected >= 0 && state.selected < len(state.results) && resultKey(state.results[state.selected]) == res.key {
+					loadSelectedImage(state)
+					state.renderDirty = true
+				}
 			}
 		case <-ticker.C:
 		}
@@ -250,7 +264,7 @@ func readInput(r io.Reader, ch chan<- inputEvent, stop <-chan struct{}) {
 	}
 }
 
-func handleInput(state *appState, ev inputEvent, out *bufio.Writer) bool {
+func handleInput(state *appState, ev inputEvent, out *bufio.Writer, prefetchCh chan<- prefetchResult) bool {
 	if ev.kind == keyCtrlC {
 		return true
 	}
@@ -260,7 +274,7 @@ func handleInput(state *appState, ev inputEvent, out *bufio.Writer) bool {
 
 	switch state.mode {
 	case modeQuery:
-		return handleQueryInput(state, ev, out)
+		return handleQueryInput(state, ev, out, prefetchCh)
 	case modeBrowse:
 		return handleBrowseInput(state, ev, out)
 	}
@@ -268,7 +282,7 @@ func handleInput(state *appState, ev inputEvent, out *bufio.Writer) bool {
 	return false
 }
 
-func handleQueryInput(state *appState, ev inputEvent, out *bufio.Writer) bool {
+func handleQueryInput(state *appState, ev inputEvent, out *bufio.Writer, prefetchCh chan<- prefetchResult) bool {
 	switch ev.kind {
 	case keyRune:
 		state.query += string(ev.ch)
@@ -299,9 +313,12 @@ func handleQueryInput(state *appState, ev inputEvent, out *bufio.Writer) bool {
 				state.status = "No results"
 				state.currentAnim = nil
 				state.previewDirty = true
+				resetPrefetch(state)
 			} else {
 				state.status = fmt.Sprintf("%d results", len(results))
 				loadSelectedImage(state)
+				resetPrefetch(state)
+				startPrefetch(state, results, prefetchCh)
 			}
 		}
 		state.mode = modeBrowse
